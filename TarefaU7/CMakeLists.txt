@@ -35,13 +35,10 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(TarefaU7 TarefaU7.c blink.pio )
+add_executable(TarefaU7 TarefaU7.c inc/ssd1306.c)
 
 pico_set_program_name(TarefaU7 "TarefaU7")
 pico_set_program_version(TarefaU7 "0.1")
-
-# Generate PIO header
-pico_generate_pio_header(TarefaU7 ${CMAKE_CURRENT_LIST_DIR}/blink.pio)
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(TarefaU7 1)
@@ -49,6 +46,9 @@ pico_enable_stdio_usb(TarefaU7 1)
 
 # Add the standard library to the build
 target_link_libraries(TarefaU7
+        hardware_pwm
+        hardware_adc
+        hardware_i2c
         pico_stdlib)
 
 # Add the standard include files to the build
@@ -58,11 +58,6 @@ target_include_directories(TarefaU7 PRIVATE
 
 # Add any user requested libraries
 target_link_libraries(TarefaU7 
-        hardware_spi
-        hardware_i2c
-        hardware_pio
-        hardware_timer
-        hardware_clocks
         
         )
 
