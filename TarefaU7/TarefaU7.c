@@ -9,31 +9,43 @@
 #define I2C_PORT i2c1
 #define I2C_SDA 14
 #define I2C_SCL 15
-#define endereco 0x3C // Endereço do display SSD1306
+#define endereco_display 0x3C // Endereço do display SSD1306
 #define bomba_PIN 4
-#define TEMP_MAX 6000
+
+typedef enum{
+    ESTADO_INICIAL =0,
+    ESTADO_BOMBA_LIGADA=1,
+    ESTADO_VOLUME_BAIXO=2,
+    ESTADO_ERRO=3,
+    ESTADO_PAUSA=4,
+}Estados;
+static volatile uint8_t estado = ESTADO_INICIAL;
+
+typedef struct{
+    const int VRX;
+    const int VRY;
+    const int ADC_CHANNEL_0;
+    const int ADC_CHANNEL_1;
+    const int LED_R;
+    const int LED_G;
+    const int LED_B;
+    const int button_A;
+    const int button_B;
+} ConfigPinos;
+static const ConfigPinos pinos = {26,27,0,1,13,11,12,5,6};
+static int TEMP_MAX = 6000; //tempo de parada para exemplificar no vídeo.
 
 // Variáveis para controle de tempo e estados
 static volatile uint32_t last_time = 0;
 static volatile uint32_t last_time2 = 0;
-static volatile uint8_t estado = 0;
-alarm_id_t alarme_emergencia;
+static volatile bool ledON=true;
 
-// Definições de pinos e constantes para o Sensor_de_nivel, botões e LEDs
-const int VRX = 26, VRY = 27, ADC_CHANNEL_0 = 0, ADC_CHANNEL_1 = 1, LED_R = 13, LED_G = 11, LED_B = 12,button_A = 5,button_B = 6;
-const float DIVIDER_PWM = 40.0;
-const uint16_t PERIOD = 500;
-
-// Variáveis para controle do PWM dos LEDs
-uint slice_LED_R, slice_LED_G, slice_LED_B;
 
 // Estrutura para o display OLED
 ssd1306_t ssd;
-static volatile bool ledON=true;
 
 // Declaração das funções
 void setup_Sensor_de_nivel();
-void setup_PWM(uint led, uint *slice, uint16_t level);
 void setup_leds();
 void setup();
 void setup_button();
@@ -45,10 +57,9 @@ void setup_bomba();
 void ligar_bomba();
 void desligar_bomba();
 
-
-
+alarm_id_t alarme_tempo_excedido;
 int64_t Emergencia(alarm_id_t id, void *user_data){
-    estado=3;
+    estado=ESTADO_ERRO;
     desligar_bomba();
     return 0;
 }
@@ -72,17 +83,13 @@ int main()
     
     char string[10];
     char string2[10];
-    gpio_set_irq_enabled_with_callback(button_A,GPIO_IRQ_EDGE_FALL,true,&button_callback);
-    gpio_set_irq_enabled_with_callback(button_B,GPIO_IRQ_EDGE_FALL,true,&button_callback);
+    gpio_set_irq_enabled_with_callback(pinos.button_A,GPIO_IRQ_EDGE_FALL,true,&button_callback);
+    gpio_set_irq_enabled_with_callback(pinos.button_B,GPIO_IRQ_EDGE_FALL,true,&button_callback);
     
     while (1)
     {
         // Lê os valores do Sensor_de_nivel
         read_Sensores_de_nivel(&VRX_value,&VRY_value);
-        
-        // Converte os valores do Sensor_de_nivel para PWM
-        int pwm_value_x=abs(VRX_value*PERIOD/4095);
-        int pwm_value_y=abs(VRY_value*PERIOD/4095);
         
         int x2 = abs((VRX_value * 101) / 4095);
         int y2 = abs((VRY_value * 101) / 4095);
@@ -101,12 +108,12 @@ int main()
                 ligar_bomba();
                 RGB(0,0,1);
             }else{
-                if (alarme_emergencia != (alarm_id_t)(intptr_t)NULL) {
-                    cancel_alarm(alarme_emergencia);
-                    alarme_emergencia = (alarm_id_t)(intptr_t)NULL; // Resetar o ID do alarme
+                if (alarme_tempo_excedido != (alarm_id_t)(intptr_t)NULL) {
+                    cancel_alarm(alarme_tempo_excedido);
+                    alarme_tempo_excedido = (alarm_id_t)(intptr_t)NULL; // Resetar o ID do alarme
                 }
                 desligar_bomba();
-                estado=0;
+                estado=ESTADO_INICIAL;
             }
             break;
             
@@ -119,7 +126,7 @@ int main()
                     else{
                         RGB(1,0,0);}
                     }else{
-                        estado=0;
+                        estado=ESTADO_INICIAL;
                     }
                     break;
             case 3:
@@ -142,8 +149,8 @@ int main()
             default:
                 if(x2<30 && y2 > 40){
                     printf("definido o alarme emergencia.\n");
-                    alarme_emergencia = add_alarm_in_ms(TEMP_MAX, Emergencia, NULL, 0);
-                    estado=1;
+                    alarme_tempo_excedido = add_alarm_in_ms(TEMP_MAX, Emergencia, NULL, 0);
+                    estado=ESTADO_BOMBA_LIGADA;
                     }
                 if(x2>=30 && y2 > 10){
                     ssd1306_draw_string(&ssd,"Aguardando...",6,50);
@@ -151,7 +158,7 @@ int main()
                     RGB(0,ledON,0);
                 }
                 if(y2 < 10){
-                    estado=2;
+                    estado=ESTADO_VOLUME_BAIXO;
                 }
                 break;
         }
@@ -163,18 +170,8 @@ int main()
 void setup_Sensor_de_nivel()
 {
     adc_init();
-    adc_gpio_init(VRX);
-    adc_gpio_init(VRY);
-}
-
-void setup_PWM(uint led, uint *slice, uint16_t level)
-{
-    gpio_set_function(led, GPIO_FUNC_PWM);
-    *slice = pwm_gpio_to_slice_num(led);
-    pwm_set_clkdiv(*slice, DIVIDER_PWM);
-    pwm_set_wrap(*slice, PERIOD);
-    pwm_set_gpio_level(led, level);
-    pwm_set_enabled(*slice, true);
+    adc_gpio_init(pinos.VRX);
+    adc_gpio_init(pinos.VRY);
 }
 
 void setup()
@@ -189,12 +186,12 @@ void setup()
 
 void read_Sensores_de_nivel(uint16_t *VRX_value,uint16_t *VRY_value)
 {
-    adc_select_input(ADC_CHANNEL_1);
+    adc_select_input(pinos.ADC_CHANNEL_1);
     sleep_ms(2);
     *VRX_value = adc_read();  // Lê VRX corretamente
-    adc_select_input(ADC_CHANNEL_0);
+    adc_select_input(pinos.ADC_CHANNEL_0);
     sleep_ms(2);
-    *VRY_value = adc_read();  // Lê VRX corretamente
+    *VRY_value = adc_read();  // Lê VRY corretamente
 }
 
 void setup_i2c(){
@@ -204,7 +201,7 @@ void setup_i2c(){
     gpio_pull_up(I2C_SDA);
     gpio_pull_up(I2C_SCL);
         // Inicializa a estrutura do display
-    ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT); // Inicializa o display
+    ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco_display, I2C_PORT); // Inicializa o display
     ssd1306_config(&ssd);                                         // Configura o display
     // ssd1306_send_data(&ssd);                                      // Envia os dados para o display
     ssd1306_fill(&ssd, false);
@@ -213,20 +210,20 @@ void setup_i2c(){
 
 void button_callback(uint gpio, uint32_t events) {
     // Cancela o alarme se ele estiver ativo
-    if (alarme_emergencia != (alarm_id_t)(intptr_t)NULL) {
-        cancel_alarm(alarme_emergencia);
-        alarme_emergencia = (alarm_id_t)(intptr_t)NULL; // Resetar o ID do alarme
+    if (alarme_tempo_excedido != (alarm_id_t)(intptr_t)NULL) {
+        cancel_alarm(alarme_tempo_excedido);
+        alarme_tempo_excedido = (alarm_id_t)(intptr_t)NULL; // Resetar o ID do alarme
     }
     uint32_t tempo_atual = to_us_since_boot(get_absolute_time());
-    if (gpio == button_A) {
+    if (gpio == pinos.button_A) {
         if (tempo_atual - last_time > 200000) {
             last_time = tempo_atual;
-            estado = 0;  // Lógica para o botão A
+            estado = ESTADO_INICIAL;  // Lógica para o botão A
         }
-    } else if (gpio == button_B) {  // Lógica separada para o botão B
+    } else if (gpio == pinos.button_B) {  // Lógica separada para o botão B
         if (tempo_atual - last_time2 > 200000) {
             last_time2 = tempo_atual;
-            estado = 4;  // Lógica para o botão B
+            estado = ESTADO_PAUSA;  // Lógica para o botão B
         }
     }
 }
@@ -234,23 +231,23 @@ void button_callback(uint gpio, uint32_t events) {
 
 void setup_leds(){
     
-    gpio_init(LED_R);
-    gpio_set_dir(LED_R,GPIO_OUT);
-    gpio_init(LED_G);
-    gpio_set_dir(LED_G,GPIO_OUT);
-    gpio_init(LED_B);
-    gpio_set_dir(LED_B,GPIO_OUT);
+    gpio_init(pinos.LED_R);
+    gpio_set_dir(pinos.LED_R,GPIO_OUT);
+    gpio_init(pinos.LED_G);
+    gpio_set_dir(pinos.LED_G,GPIO_OUT);
+    gpio_init(pinos.LED_B);
+    gpio_set_dir(pinos.LED_B,GPIO_OUT);
 
-    gpio_put(LED_R,0);
-    gpio_put(LED_G,0);
-    gpio_put(LED_B,0);
+    gpio_put(pinos.LED_R,0);
+    gpio_put(pinos.LED_G,0);
+    gpio_put(pinos.LED_B,0);
 
 }
 
 void RGB(int r,int g, int b){
-    gpio_put(LED_R,r);
-    gpio_put(LED_G,g);
-    gpio_put(LED_B,b);
+    gpio_put(pinos.LED_R,r);
+    gpio_put(pinos.LED_G,g);
+    gpio_put(pinos.LED_B,b);
 }
 
 void setup_bomba() {
@@ -268,10 +265,10 @@ void desligar_bomba() {
 }
 
 void setup_button(){
-    gpio_init(button_A);
-    gpio_set_dir(button_A,GPIO_IN);
-    gpio_pull_up(button_A);
-    gpio_init(button_B);
-    gpio_set_dir(button_B,GPIO_IN);
-    gpio_pull_up(button_B);
+    gpio_init(pinos.button_A);
+    gpio_set_dir(pinos.button_A,GPIO_IN);
+    gpio_pull_up(pinos.button_A);
+    gpio_init(pinos.button_B);
+    gpio_set_dir(pinos.button_B,GPIO_IN);
+    gpio_pull_up(pinos.button_B);
 }
