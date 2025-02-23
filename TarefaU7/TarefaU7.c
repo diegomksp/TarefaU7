@@ -65,6 +65,7 @@ void RGB(int r,int g, int b);
 void setup_bomba();
 void ligar_bomba();
 void desligar_bomba();
+void display_estado_bomba(uint8_t n);
 
 //Função callback para o alarme de tempo excedido
 alarm_id_t alarme_tempo_excedido;
@@ -124,7 +125,7 @@ int main()
         switch(estado){
             case 1:
             if(x2<98&&y2>10){
-                ssd1306_draw_string(&ssd,"Bomba ON!",6,50);
+                display_estado_bomba(1);
                 ligar_bomba();
                 RGB(0,0,1);
             }else{
@@ -139,7 +140,7 @@ int main()
             
             case 2:
             if(y2<40){
-                ssd1306_draw_string(&ssd,"Bomba OFF",6,21);
+                display_estado_bomba(0);
                 ssd1306_draw_string(&ssd,"vol. insuf.!",6,50);
                 if(y2>10){
                     RGB(1,1,0);}
@@ -154,7 +155,6 @@ int main()
                 ssd1306_draw_string(&ssd,"Erro(timer)",6,11);
                 ssd1306_draw_string(&ssd,"Ver. sensores",6,21);
                 ssd1306_draw_string(&ssd,"e press 'A'",6,31);
-                ssd1306_draw_string(&ssd,"Bomba OFF",6,41);
                 RGB(1,0,1);
             break;
             case 4:
@@ -162,7 +162,6 @@ int main()
                 ssd1306_draw_string(&ssd,"Ciclo em pausa",6,11);
                 ssd1306_draw_string(&ssd,"pressione A",6,21);
                 ssd1306_draw_string(&ssd,"p/ continue.,",6,31);
-                ssd1306_draw_string(&ssd,"Bomba OFF",6,41);
                 RGB(1,1,1);
             break;
 
@@ -173,7 +172,7 @@ int main()
                     }
                 if(x2>=30 && y2 > 10){
                     ssd1306_draw_string(&ssd,"Aguardando...",6,50);
-                    ssd1306_draw_string(&ssd,"Bomba OFF",6,21);
+                    display_estado_bomba(0);
                     RGB(0,ledON,0);
                 }
                 if(y2 < 10){
@@ -300,4 +299,14 @@ void setup_button(){
     gpio_init(pinos.button_B);
     gpio_set_dir(pinos.button_B,GPIO_IN);
     gpio_pull_up(pinos.button_B);
+}
+
+void display_estado_bomba(uint8_t n){
+    if(n==1){
+        ssd1306_rect(&ssd,27,18,90,20,1,0);
+        ssd1306_draw_string(&ssd,"Bomba ON!",24,32);
+    }else{
+        ssd1306_rect(&ssd,27,18,90,20,1,0);
+        ssd1306_draw_string(&ssd,"Bomba OFF!",24,32);
+    }
 }
