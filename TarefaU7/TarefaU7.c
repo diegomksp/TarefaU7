@@ -123,7 +123,7 @@ int main()
         
         // Máquina de estados
         switch(estado){
-            case 1:
+            case ESTADO_BOMBA_LIGADA:
             if(x2<98&&y2>10){
                 display_estado_bomba(1);
                 ligar_bomba();
@@ -138,7 +138,7 @@ int main()
             }
             break;
             
-            case 2:
+            case ESTADO_VOLUME_BAIXO:
             if(y2<40){
                 display_estado_bomba(0);
                 ssd1306_draw_string(&ssd,"vol. insuf.!",6,50);
@@ -150,14 +150,14 @@ int main()
                         estado=ESTADO_INICIAL;
                     }
             break;
-            case 3:
+            case ESTADO_ERRO:
                 ssd1306_fill(&ssd,0);
                 ssd1306_draw_string(&ssd,"Erro(timer)",6,11);
                 ssd1306_draw_string(&ssd,"Ver. sensores",6,21);
                 ssd1306_draw_string(&ssd,"e press 'A'",6,31);
                 RGB(1,0,1);
             break;
-            case 4:
+            case ESTADO_PAUSA:
                 ssd1306_fill(&ssd,0);
                 ssd1306_draw_string(&ssd,"Ciclo em pausa",6,11);
                 ssd1306_draw_string(&ssd,"pressione A",6,21);
